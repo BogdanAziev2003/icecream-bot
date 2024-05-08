@@ -1,9 +1,11 @@
+const { default: axios } = require("axios")
 const TelegramBot = require("node-telegram-bot-api")
-const { get } = require("request")
 require("dotenv").config()
 
 const groupId = Number(process.env.GROUP_ID)
 const bot = new TelegramBot(process.env.TOKEN, { polling: true })
+let isStockChange = false
+let stockId = []
 
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id
@@ -65,16 +67,18 @@ bot.on("message", async (msg) => {
     }
   }
 
-  if (msg.reply_to_message && chatId === groupId){
-    if(!msg.reply_to_message.from.is_bot){
-      console.log("No");
+  if (msg.reply_to_message && chatId === groupId) {
+    if (!msg.reply_to_message.from.is_bot) {
+      console.log("No")
       return
     }
 
     const replyedText = msg.reply_to_message.text
-    const lastStroke = replyedText.split("\n").find((el) => el.includes("CHAT ID:"))
-    
-    if(lastStroke === undefined){
+    const lastStroke = replyedText
+      .split("\n")
+      .find((el) => el.includes("CHAT ID:"))
+
+    if (lastStroke === undefined) {
       console.log("No")
       return
     }
@@ -83,8 +87,64 @@ bot.on("message", async (msg) => {
 
     await bot.sendMessage(idToSend, text)
 
-    console.log(idToSend);
+    console.log(idToSend)
     console.dirxml(msg.reply_to_message)
+  }
+
+  if (isStockChange === true && chatId === groupId) {
+    console.log(!stockId.includes(text))
+    if (!stockId.includes(Number(text))) {
+      bot.sendMessage(chatId, "Введены некоректные данные, попробуйте еще раз")
+      isStockChange = false
+      return
+    }
+
+    try {
+      await axios
+        .put("https://server.tg-delivery.ru/api/icecream/change-stock", {
+          id: Number(text),
+        })
+        .then(() => {
+          bot.sendMessage(chatId, "Данные были успешно изменены")
+          isGoodsChange = false
+          isModifiersChange = false
+        })
+    } catch (error) {
+      bot.sendMessage(chatId, "Произошла какая-то ошибка")
+    }
+
+    isStockChange = false
+  }
+
+  if (text === "Админка" && chatId === groupId) {
+    await bot.sendMessage(chatId, "Панель администратора", {
+      reply_markup: {
+        keyboard: [
+          [
+            {
+              text: "Мороженное",
+            },
+          ],
+        ],
+        resize_keyboard: true,
+      },
+    })
+  }
+
+  if (text === "Мороженное" && chatId === groupId) {
+    bot.deleteMessage(chatId, msg.message_id)
+    axios
+      .get("https://server.tg-delivery.ru/api/icecream/get-stock")
+      .then((data) => {
+        let text = ""
+        data.data.forEach((el, index) => {
+          text += `${el.id}. ${el.name} - ${el.stock}\n`
+          stockId.push(el.id)
+        })
+        bot.sendMessage(chatId, text)
+      })
+
+    isStockChange = true
   }
 })
 
@@ -95,7 +155,10 @@ bot.on("callback_query", async (query) => {
   switch (query.data) {
     case "acceptButton":
       await bot.sendMessage(chatId, "Заказ был принят")
-      await bot.sendMessage(process.env.GROUP_ID, query.message.text + `\n\nCHAT ID: ${chatId}`)
+      await bot.sendMessage(
+        process.env.GROUP_ID,
+        query.message.text + `\n\nCHAT ID: ${chatId}`
+      )
 
       bot.editMessageReplyMarkup(
         { inline_keyboard: [] },
