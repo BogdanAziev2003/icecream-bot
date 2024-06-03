@@ -21,7 +21,7 @@ bot.on("message", async (msg) => {
             {
               text: "Меню 🍔",
               web_app: {
-                url: "https://main--inspiring-pika-5fe4bc.netlify.app",
+                url: "https://icecream.tg-delivery.ru/",
               },
             },
           ],
